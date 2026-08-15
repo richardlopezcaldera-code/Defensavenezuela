@@ -55,10 +55,7 @@ const RESPALDO: Servicio[] = [
 ];
 
 async function obtenerServicios(): Promise<Servicio[]> {
-  const cliente = supabasePublico();
-  if (!cliente) return RESPALDO;
-
-  const { data, error } = await cliente
+  const { data, error } = await supabasePublico()
     .from("servicios")
     .select(
       "id, slug, nombre, nombre_en, nombre_pt, descripcion, categoria, requisitos, duracion_estimada, precio_desde, moneda, orden"

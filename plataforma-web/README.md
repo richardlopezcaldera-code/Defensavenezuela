@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DefensaVenezuela — Plataforma web
 
-## Getting Started
+Sitio y captación de clientes del estudio del **Abg. Richard López Caldera**.
+Atiende a la diáspora venezolana e inversionistas entre Venezuela y Chile.
 
-First, run the development server:
+Next.js 16 · React 19 · Tailwind 4 · Supabase · Gemini
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## Arquitectura
+
+```
+src/
+  app/
+    page.tsx              Server component. Lee el catálogo de servicios de Supabase
+    layout.tsx            SEO, Open Graph y JSON-LD (schema LegalService)
+    sitemap.ts robots.ts
+    api/
+      leads/route.ts      Guarda el lead en la base y devuelve el enlace de WhatsApp
+      ia/chat/route.ts    Asistente Gemini del lado servidor, con registro de consultas
+  components/
+    Landing.tsx           Nav, hero, servicios, CTA de inversión, footer
+    AsistenteModal.tsx    Chat IA + formulario de contacto + generador de requisitos
+    Redes.tsx             Iconos de marca (lucide v1 ya no los trae)
+  lib/
+    config.ts             Datos del estudio, WhatsApp y redes
+    gemini.ts             Llamada a Gemini con reintentos y timeout
+    seguridad.ts          Rate limit, honeypot, saneamiento, hash de IP
+    i18n.ts               Textos es / en / pt
+    tipos.ts
+    supabase/
+      admin.ts            service_role — SOLO servidor, salta el RLS
+      publico.ts          Clave publicable — solo lee servicios activos
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**Regla de oro:** `admin.ts` jamás debe importarse desde un componente cliente.
+Esa clave da acceso total a la base.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Base de datos
 
-## Learn More
+Supabase, proyecto `htjjxqvzxkrabozopxhe`, esquema **`defensa`**
+(aislado del CRM comercial que vive en `public`).
 
-To learn more about Next.js, take a look at the following resources:
+| Tabla | Contenido |
+|---|---|
+| `servicios` | Catálogo editable sin tocar código |
+| `leads` | Contactos con UTM, origen, estado y score |
+| `clientes` | Ficha del cliente convertido |
+| `expedientes` | Trámites con código `DV-2026-1000`, estado y honorarios |
+| `expediente_eventos` | Bitácora del caso |
+| `documentos` | Control de recaudos |
+| `consultas_ia` | Registro del asistente, con latencia y tokens |
+| `contenido_social` | Calendario editorial de redes |
+| `checklist_plantillas` · `checklist_items` | Plantillas reutilizables (due diligence) |
+| `expediente_checklist` | La plantilla aplicada a un expediente |
+| `suscriptores` · `staff` | Base de correo y control de acceso |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**RLS activo en todas.** Por defecto nadie lee nada: solo staff autenticado y
+activo. La única lectura pública es el catálogo de servicios.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Para editar un servicio no hace falta desplegar: se cambia en la tabla y la web
+se actualiza sola en 5 minutos (`revalidate = 300` en `page.tsx`).
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Puesta en marcha
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm install
+cp .env.example .env.local   # completar las claves secretas
+npm run dev
+```
+
+### Variables de entorno
+
+| Variable | Obligatoria | Para qué |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | sí | Guardar leads y consultas. **Secreta** |
+| `GEMINI_API_KEY` | sí | Asistente IA. **Secreta** |
+| `NEXT_PUBLIC_SUPABASE_URL` | no | Tiene valor por defecto |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | no | Publicable por diseño |
+| `NEXT_PUBLIC_SITE_URL` | sí en producción | URLs canónicas y sitemap |
+| `NEXT_PUBLIC_WHATSAPP` | no | Número de contacto |
+| `IP_HASH_SALT` | recomendada | Anonimiza las IPs guardadas |
+
+**Degradación controlada:** sin `GEMINI_API_KEY` el asistente responde un mensaje
+de respaldo y deriva a WhatsApp. Sin `SUPABASE_SERVICE_ROLE_KEY` el lead no se
+guarda pero WhatsApp igual se abre. El sitio nunca se cae del todo.
+
+---
+
+## Despliegue en Vercel
+
+Al conectar el repositorio, el **Root Directory debe ser `plataforma-web`**,
+no la raíz. Vercel detecta Next.js solo. Cargar las variables de entorno en
+Project Settings → Environment Variables y redesplegar.
+
+---
+
+## Seguridad
+
+- La clave de Gemini vive solo en el servidor, nunca llega al navegador
+- Rate limit por IP: 5 leads y 20 consultas IA cada 10 minutos
+- Honeypot antispam y consentimiento de datos obligatorio
+- Las IPs se guardan como hash, no en claro
+- Toda entrada del usuario se valida y sanea antes de tocar la base
+
+## Comandos
+
+```bash
+npm run dev     # desarrollo
+npm run build   # build de producción
+npm run lint    # ESLint
+```
