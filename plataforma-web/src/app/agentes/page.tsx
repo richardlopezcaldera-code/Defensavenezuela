@@ -13,7 +13,18 @@ export const metadata: Metadata = {
   alternates: { canonical: "/agentes" },
 };
 
-export default async function PaginaAgentes() {
-  const agentes = await listarAgentes();
-  return <CentroAgentes agentes={agentes} />;
+export default async function PaginaAgentes({
+  searchParams,
+}: {
+  searchParams: Promise<{ agente?: string; pais?: string }>;
+}) {
+  const [agentes, params] = await Promise.all([listarAgentes(), searchParams]);
+
+  return (
+    <CentroAgentes
+      agentes={agentes}
+      slugInicial={params.agente}
+      paisInicial={params.pais?.toUpperCase()}
+    />
+  );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowRight,
   Bot,
@@ -80,14 +81,14 @@ export default function Landing({ servicios }: { servicios: Servicio[] }) {
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => abrir("ia")}
+            <Link
+              href="/agentes"
               className="bg-slate-900 text-white px-4 sm:px-6 py-2.5 rounded-lg text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-2 shadow-lg group"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:rotate-12 transition-transform" />
               <span className="hidden xs:inline">ASISTENTE IA</span>
               <span className="xs:hidden">IA</span>
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
@@ -114,13 +115,13 @@ export default function Landing({ servicios }: { servicios: Servicio[] }) {
               {t.hero_sub}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button
-                onClick={() => abrir("ia")}
+              <Link
+                href="/agentes"
                 className="bg-amber-600 hover:bg-amber-500 text-white px-8 py-5 rounded-xl font-black text-base transition-all shadow-2xl flex items-center gap-3 justify-center uppercase tracking-wider hover:scale-[1.02] active:scale-95 group"
               >
                 {t.cta_main}
                 <Bot className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              </button>
+              </Link>
               <button
                 onClick={() => abrir("contacto")}
                 className="border-2 border-slate-700 hover:border-amber-500 text-white px-8 py-5 rounded-xl font-black text-base transition-colors uppercase tracking-wider"
@@ -197,18 +198,12 @@ export default function Landing({ servicios }: { servicios: Servicio[] }) {
               preliminar de forma societaria, permisos sectoriales, riesgo cambiario y exposición a
               sanciones.
             </p>
-            <button
-              onClick={() =>
-                abrir(
-                  "inversion",
-                  "inversion-extranjera",
-                  "Quiero evaluar un proyecto de inversión en Venezuela."
-                )
-              }
+            <Link
+              href="/agentes?agente=due-diligence"
               className="bg-amber-600 hover:bg-amber-500 px-8 py-5 rounded-xl font-black uppercase tracking-wider inline-flex items-center gap-3 transition-colors shadow-2xl"
             >
               {t.analysis_btn} <ArrowRight className="w-5 h-5" />
-            </button>
+            </Link>
           </div>
         </section>
       </main>
@@ -240,13 +235,13 @@ export default function Landing({ servicios }: { servicios: Servicio[] }) {
       </footer>
 
       {/* ---------------- BOTÓN FLOTANTE ---------------- */}
-      <button
-        onClick={() => abrir("ia")}
+      <Link
+        href="/agentes"
         aria-label={t.cta_main}
         className="fixed bottom-6 right-6 z-30 bg-green-600 hover:bg-green-500 text-white p-5 rounded-full shadow-2xl hover:scale-110 transition-transform active:scale-95"
       >
         <Bot className="w-7 h-7" />
-      </button>
+      </Link>
 
       {/* ---------------- MODAL ---------------- */}
       {modalAbierto && (

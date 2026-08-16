@@ -54,11 +54,26 @@ function Formateado({ texto }: { texto: string }) {
   );
 }
 
-export default function CentroAgentes({ agentes }: { agentes: AgenteIA[] }) {
+export default function CentroAgentes({
+  agentes,
+  slugInicial,
+  paisInicial,
+}: {
+  agentes: AgenteIA[];
+  slugInicial?: string;
+  paisInicial?: string;
+}) {
   const grupos = useMemo(() => agruparPorSlug(agentes), [agentes]);
 
-  const [slugActivo, setSlugActivo] = useState(grupos[0]?.slug ?? "");
-  const [pais, setPais] = useState<Pais>("VEN");
+  // Permite entrar directo al agente correcto desde la portada:
+  // /agentes?agente=due-diligence
+  const inicial =
+    slugInicial && grupos.some((g) => g.slug === slugInicial)
+      ? slugInicial
+      : (grupos[0]?.slug ?? "");
+
+  const [slugActivo, setSlugActivo] = useState(inicial);
+  const [pais, setPais] = useState<Pais>(paisInicial === "CHI" ? "CHI" : "VEN");
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [entrada, setEntrada] = useState("");
   const [cargando, setCargando] = useState(false);
