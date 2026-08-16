@@ -113,3 +113,86 @@ Reglas estrictas:
 - Aclara que la orientación es preliminar y no sustituye asesoría legal formal.
 - No solicites números de documento, datos bancarios ni información sensible por este canal.
 - Cierra invitando de forma elegante a continuar por WhatsApp con el equipo.`;
+
+/**
+ * Versión en streaming: devuelve los fragmentos según llegan.
+ * El usuario ve texto a los ~2 segundos en vez de esperar la respuesta completa.
+ */
+export async function* llamarGeminiStream(opciones: {
+  systemPrompt: string;
+  historial?: Turno[];
+  mensaje: string;
+}): AsyncGenerator<string, { texto: string; modelo: string; latenciaMs: number }, void> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY no está configurada en el entorno.");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:streamGenerateContent?alt=sse`;
+  const inicio = Date.now();
+
+  const contents = [
+    ...(opciones.historial ?? []).map((t) => ({ role: t.role, parts: [{ text: t.text }] })),
+    { role: "user" as const, parts: [{ text: opciones.mensaje }] },
+  ];
+
+  const controlador = new AbortController();
+  const timeout = setTimeout(() => controlador.abort(), 55_000);
+
+  let completo = "";
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: opciones.systemPrompt }] },
+        contents,
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1600 },
+      }),
+      signal: controlador.signal,
+    });
+
+    if (!res.ok || !res.body) {
+      const detalle = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${detalle.slice(0, 200)}`);
+    }
+
+    const lector = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await lector.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lineas = buffer.split("\n");
+      buffer = lineas.pop() ?? "";
+
+      for (const linea of lineas) {
+        if (!linea.startsWith("data:")) continue;
+        const json = linea.slice(5).trim();
+        if (!json || json === "[DONE]") continue;
+
+        try {
+          const dato = JSON.parse(json);
+          const trozo: string =
+            dato?.candidates?.[0]?.content?.parts
+              ?.map((p: { text?: string }) => p.text ?? "")
+              .join("") ?? "";
+          if (trozo) {
+            completo += trozo;
+            yield trozo;
+          }
+        } catch {
+          // Fragmento SSE incompleto: se ignora y se reintenta en la próxima vuelta.
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!completo) throw new Error("El modelo no devolvió contenido.");
+
+  return { texto: completo, modelo: MODELO, latenciaMs: Date.now() - inicio };
+}
