@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { REDES, SITIO } from "@/lib/config";
+import { PERFILES_PUBLICOS, SITIO } from "@/lib/config";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITIO.url),
@@ -61,7 +61,7 @@ const datosEstructurados = {
   ],
   availableLanguage: ["es", "en", "pt"],
   founder: { "@type": "Person", name: SITIO.abogado, jobTitle: "Abogado" },
-  sameAs: Object.values(REDES),
+  sameAs: PERFILES_PUBLICOS,
   knowsAbout: [
     "Apostilla de La Haya",
     "Poderes otorgados en el exterior",

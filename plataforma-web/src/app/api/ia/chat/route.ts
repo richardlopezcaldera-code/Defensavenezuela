@@ -6,9 +6,35 @@ import { hashIp, ipDe, limitar, limpiar } from "@/lib/seguridad";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type Turno = { role: "user" | "model"; text: string };
+
+const PAISES = ["VEN", "CHI", "SINGLE"] as const;
+
+/**
+ * Carga el prompt del agente desde la base.
+ * Vive en el servidor: el prompt es propiedad intelectual del estudio
+ * y nunca debe viajar al navegador.
+ */
+async function promptDelAgente(slug: string | null, pais: string) {
+  if (!slug) return null;
+
+  const { data, error } = await supabaseAdmin()
+    .from("agentes_ia")
+    .select("system_prompt, nombre")
+    .eq("slug", slug)
+    .eq("pais", pais)
+    .eq("activo", true)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[ia] no se pudo leer el agente:", error.message);
+    return null;
+  }
+
+  return data?.system_prompt ?? null;
+}
 
 export async function POST(req: Request) {
   const ip = ipDe(req);
@@ -30,6 +56,9 @@ export async function POST(req: Request) {
   const mensaje = limpiar(cuerpo.mensaje, 2000);
   const idioma = ["es", "en", "pt"].includes(String(cuerpo.idioma)) ? String(cuerpo.idioma) : "es";
   const sessionId = limpiar(cuerpo.session_id, 64) ?? "anonima";
+  const agenteSlug = limpiar(cuerpo.agente, 60);
+  const paisBruto = String(cuerpo.pais ?? "SINGLE").toUpperCase();
+  const pais = (PAISES as readonly string[]).includes(paisBruto) ? paisBruto : "SINGLE";
   const tipo = ["chat", "checklist", "analisis_inversion"].includes(String(cuerpo.tipo))
     ? String(cuerpo.tipo)
     : "chat";
@@ -47,18 +76,21 @@ export async function POST(req: Request) {
 
   const idiomaNombre = { es: "español", en: "inglés", pt: "portugués" }[idioma] ?? "español";
 
+  // 1º el prompt del agente especializado; si no hay, el contexto general.
+  const base = (await promptDelAgente(agenteSlug, pais)) ?? CONTEXTO_BASE;
+
   const instrucciones =
     tipo === "checklist"
-      ? `${CONTEXTO_BASE}
+      ? `${base}
 
 TAREA: entrega una lista numerada de requisitos y pasos para el trámite indicado, pensada para un cliente que está fuera de Venezuela. Marca cuáles requisitos exigen apostilla y cuáles pueden gestionarse por poder. Idioma de la respuesta: ${idiomaNombre}.`
       : tipo === "analisis_inversion"
-        ? `${CONTEXTO_BASE}
+        ? `${base}
 
 TAREA: analiza la viabilidad legal preliminar del proyecto de inversión descrito. Cubre: forma societaria recomendada, permisos sectoriales probables, riesgo cambiario y de sanciones, y los tres puntos de due diligence más críticos. Idioma de la respuesta: ${idiomaNombre}.`
-        : `${CONTEXTO_BASE}
+        : `${base}
 
-Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: +${SITIO.whatsapp}.`;
+Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: ${SITIO.whatsappMostrar}.`;
 
   try {
     const resultado = await llamarGemini({
@@ -74,6 +106,8 @@ Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: +${SITIO.whatsapp}
         session_id: sessionId,
         idioma,
         tipo,
+        agente_slug: agenteSlug,
+        pais,
         pregunta: mensaje,
         respuesta: resultado.texto,
         modelo: resultado.modelo,
@@ -97,6 +131,8 @@ Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: +${SITIO.whatsapp}
         session_id: sessionId,
         idioma,
         tipo,
+        agente_slug: agenteSlug,
+        pais,
         pregunta: mensaje,
         error: detalle.slice(0, 500),
         ip_hash: hashIp(ip),
@@ -106,7 +142,7 @@ Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: +${SITIO.whatsapp}
     return NextResponse.json(
       {
         ok: false,
-        error: "El asistente no está disponible en este momento. Escríbenos por WhatsApp.",
+        error: `El asistente no está disponible en este momento. Escríbenos por WhatsApp: ${SITIO.whatsappMostrar}`,
       },
       { status: 503 }
     );
