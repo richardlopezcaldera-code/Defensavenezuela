@@ -63,6 +63,13 @@ export default function AsistenteModal({
   // --------------------------------------------------------
   // Llamada al asistente (siempre a través de nuestro servidor)
   // --------------------------------------------------------
+  /**
+   * Lee la respuesta sin reventar si el cuerpo viene vacío.
+   * Si la función del servidor muere, el navegador recibe 0 bytes y
+   * res.json() lanza "Unexpected end of JSON input": un error técnico
+   * que el cliente no debe mostrarle nunca a un visitante.
+   */
+
   const consultarIA = useCallback(
     async (mensaje: string, tipo: "chat" | "checklist" | "analisis_inversion") => {
       const res = await fetch("/api/ia/chat", {
@@ -76,9 +83,15 @@ export default function AsistenteModal({
           historial: tipo === "chat" ? historial.slice(-8) : [],
         }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error ?? t.error_generico);
-      return data.texto as string;
+      const data = await res
+        .json()
+        .catch(() => null as { ok?: boolean; error?: string; texto?: string } | null);
+
+      if (!res.ok || !data?.ok || !data.texto) {
+        throw new Error(data?.error ?? t.error_generico);
+      }
+
+      return data.texto;
     },
     [idioma, historial, t.error_generico]
   );
@@ -193,15 +206,17 @@ export default function AsistenteModal({
         }),
       });
 
-      const data = await res.json();
+      const data = await res
+        .json()
+        .catch(() => null as { ok?: boolean; error?: string; whatsappUrl?: string } | null);
 
-      if (!res.ok || !data.ok) {
-        setAviso({ tipo: "error", texto: data.error ?? t.error_generico });
+      if (!res.ok || !data?.ok) {
+        setAviso({ tipo: "error", texto: data?.error ?? t.error_generico });
         return;
       }
 
       setAviso({ tipo: "ok", texto: t.lead_ok });
-      window.open(data.whatsappUrl, "_blank", "noopener,noreferrer");
+      if (data.whatsappUrl) window.open(data.whatsappUrl, "_blank", "noopener,noreferrer");
     } catch {
       setAviso({ tipo: "error", texto: t.error_generico });
     } finally {

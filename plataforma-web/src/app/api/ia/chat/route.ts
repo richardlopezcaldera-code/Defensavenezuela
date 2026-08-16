@@ -3,6 +3,7 @@ import { CONTEXTO_BASE, llamarGemini } from "@/lib/gemini";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SITIO } from "@/lib/config";
 import { hashIp, ipDe, limitar, limpiar } from "@/lib/seguridad";
+import { registrarConsultaIA } from "@/lib/registro";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,20 +21,25 @@ const PAISES = ["VEN", "CHI", "SINGLE"] as const;
 async function promptDelAgente(slug: string | null, pais: string) {
   if (!slug) return null;
 
-  const { data, error } = await supabaseAdmin()
-    .from("agentes_ia")
-    .select("system_prompt, nombre")
-    .eq("slug", slug)
-    .eq("pais", pais)
-    .eq("activo", true)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("agentes_ia")
+      .select("system_prompt")
+      .eq("slug", slug)
+      .eq("pais", pais)
+      .eq("activo", true)
+      .maybeSingle();
 
-  if (error) {
-    console.error("[ia] no se pudo leer el agente:", error.message);
+    if (error) {
+      console.error("[ia] no se pudo leer el agente:", error.message);
+      return null;
+    }
+
+    return data?.system_prompt ?? null;
+  } catch (e) {
+    console.error("[ia] base no disponible:", e instanceof Error ? e.message : e);
     return null;
   }
-
-  return data?.system_prompt ?? null;
 }
 
 export async function POST(req: Request) {
@@ -100,44 +106,36 @@ Idioma de la respuesta: ${idiomaNombre}. WhatsApp del equipo: ${SITIO.whatsappMo
     });
 
     // Registro para seguimiento comercial. Nunca bloquea la respuesta.
-    void supabaseAdmin()
-      .from("consultas_ia")
-      .insert({
-        session_id: sessionId,
-        idioma,
-        tipo,
-        agente_slug: agenteSlug,
-        pais,
-        pregunta: mensaje,
-        respuesta: resultado.texto,
-        modelo: resultado.modelo,
-        tokens_in: resultado.tokensIn,
-        tokens_out: resultado.tokensOut,
-        latencia_ms: resultado.latenciaMs,
-        ip_hash: hashIp(ip),
-      })
-      .then(({ error }) => {
-        if (error) console.error("[ia] no se pudo registrar la consulta:", error.message);
-      });
+    void registrarConsultaIA({
+      session_id: sessionId,
+      idioma,
+      tipo,
+      agente_slug: agenteSlug,
+      pais,
+      pregunta: mensaje,
+      respuesta: resultado.texto,
+      modelo: resultado.modelo,
+      tokens_in: resultado.tokensIn,
+      tokens_out: resultado.tokensOut,
+      latencia_ms: resultado.latenciaMs,
+      ip_hash: hashIp(ip),
+    });
 
     return NextResponse.json({ ok: true, texto: resultado.texto });
   } catch (e) {
     const detalle = e instanceof Error ? e.message : String(e);
     console.error("[ia] error:", detalle);
 
-    void supabaseAdmin()
-      .from("consultas_ia")
-      .insert({
-        session_id: sessionId,
-        idioma,
-        tipo,
-        agente_slug: agenteSlug,
-        pais,
-        pregunta: mensaje,
-        error: detalle.slice(0, 500),
-        ip_hash: hashIp(ip),
-      })
-      .then(() => undefined);
+    void registrarConsultaIA({
+      session_id: sessionId,
+      idioma,
+      tipo,
+      agente_slug: agenteSlug,
+      pais,
+      pregunta: mensaje,
+      error: detalle.slice(0, 500),
+      ip_hash: hashIp(ip),
+    });
 
     return NextResponse.json(
       {

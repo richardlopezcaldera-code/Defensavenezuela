@@ -190,11 +190,12 @@ export default function Landing({ servicios }: { servicios: Servicio[] }) {
           <div className="max-w-4xl mx-auto text-center">
             <Gavel className="w-10 h-10 text-amber-500 mx-auto mb-6" />
             <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tighter mb-5">
-              ¿Vas a invertir en Venezuela desde Chile?
+              ¿Vas a invertir en Venezuela?
             </h2>
             <p className="text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Describe tu proyecto y el asistente entrega un análisis preliminar de forma
-              societaria, permisos sectoriales, riesgo cambiario y exposición a sanciones.
+              Desde donde estés. Describe tu proyecto y el asistente entrega un análisis
+              preliminar de forma societaria, permisos sectoriales, riesgo cambiario y exposición a
+              sanciones.
             </p>
             <button
               onClick={() =>

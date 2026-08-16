@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SITIO } from "@/lib/config";
 import { hashIp, ipDe, limitar, limpiar } from "@/lib/seguridad";
 import { MARCA_ERROR } from "@/lib/marcas";
+import { registrarConsultaIA } from "@/lib/registro";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,20 +16,25 @@ const PAISES = ["VEN", "CHI", "SINGLE"] as const;
 async function promptDelAgente(slug: string | null, pais: string) {
   if (!slug) return null;
 
-  const { data, error } = await supabaseAdmin()
-    .from("agentes_ia")
-    .select("system_prompt")
-    .eq("slug", slug)
-    .eq("pais", pais)
-    .eq("activo", true)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("agentes_ia")
+      .select("system_prompt")
+      .eq("slug", slug)
+      .eq("pais", pais)
+      .eq("activo", true)
+      .maybeSingle();
 
-  if (error) {
-    console.error("[ia/stream] no se pudo leer el agente:", error.message);
+    if (error) {
+      console.error("[ia/stream] no se pudo leer el agente:", error.message);
+      return null;
+    }
+
+    return data?.system_prompt ?? null;
+  } catch (e) {
+    console.error("[ia/stream] base no disponible:", e instanceof Error ? e.message : e);
     return null;
   }
-
-  return data?.system_prompt ?? null;
 }
 
 function textoPlano(cuerpo: string, status: number) {
@@ -87,23 +93,18 @@ export async function POST(req: Request) {
 
         const { texto, modelo, latenciaMs } = paso.value;
 
-        void supabaseAdmin()
-          .from("consultas_ia")
-          .insert({
-            session_id: sessionId,
-            idioma: "es",
-            tipo: "chat",
-            agente_slug: agenteSlug,
-            pais,
-            pregunta: mensaje,
-            respuesta: texto,
-            modelo,
-            latencia_ms: latenciaMs,
-            ip_hash: hashIp(ip),
-          })
-          .then(({ error }) => {
-            if (error) console.error("[ia/stream] no se registró la consulta:", error.message);
-          });
+        void registrarConsultaIA({
+          session_id: sessionId,
+          idioma: "es",
+          tipo: "chat",
+          agente_slug: agenteSlug,
+          pais,
+          pregunta: mensaje,
+          respuesta: texto,
+          modelo,
+          latencia_ms: latenciaMs,
+          ip_hash: hashIp(ip),
+        });
       } catch (e) {
         const detalle = e instanceof Error ? e.message : String(e);
         console.error("[ia/stream] error:", detalle);
@@ -116,18 +117,15 @@ export async function POST(req: Request) {
           )
         );
 
-        void supabaseAdmin()
-          .from("consultas_ia")
-          .insert({
-            session_id: sessionId,
-            tipo: "chat",
-            agente_slug: agenteSlug,
-            pais,
-            pregunta: mensaje,
-            error: detalle.slice(0, 500),
-            ip_hash: hashIp(ip),
-          })
-          .then(() => undefined);
+        void registrarConsultaIA({
+          session_id: sessionId,
+          tipo: "chat",
+          agente_slug: agenteSlug,
+          pais,
+          pregunta: mensaje,
+          error: detalle.slice(0, 500),
+          ip_hash: hashIp(ip),
+        });
       } finally {
         controlador.close();
       }
